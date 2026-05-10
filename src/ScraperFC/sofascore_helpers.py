@@ -1,12 +1,18 @@
+import json
 import pandas as pd
 from .utils.botasaurus_getters import botasaurus_browser_get_json
 
 # ==================================================================================================
-def _get_player_career_stats_df(player_id: int, api_prefix: str) -> pd.DataFrame:
+def _get_player_career_stats_df(player_id: int, api_prefix: str, driver=None) -> pd.DataFrame:
     if not isinstance(player_id, int):
         raise TypeError("player_id must be an integer.")
 
-    response = botasaurus_browser_get_json(f"{api_prefix}/player/{player_id}/statistics")
+    url = f"{api_prefix}/player/{player_id}/statistics"
+    if driver is not None:
+        driver.get(url)
+        response = json.loads(driver.page_text)
+    else:
+        response = botasaurus_browser_get_json(url)
 
     if "seasons" not in response:
         return pd.DataFrame()

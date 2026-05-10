@@ -1,11 +1,14 @@
+import time
+import json
 import pandas as pd
 import numpy as np
 import warnings
 from tqdm import tqdm
 from datetime import datetime, timezone, timedelta
+from botasaurus_driver import Driver
 
 from .scraperfc_exceptions import InvalidLeagueException, InvalidYearException
-from .utils import botasaurus_browser_get_json, get_module_comps
+from .utils import botasaurus_browser_get_json, botasaurus_request_get_json, get_module_comps
 from .sofascore_player import SofascorePlayer
 from .sofascore_helpers import _get_player_career_stats_df
 
@@ -603,61 +606,65 @@ class Sofascore:
             print(f"WARNING: No players found for {year} {league}.")
 
         player_details = list()
-        pbar = tqdm(player_ids, ncols=100)
-        for player_id in pbar:
-            pbar.set_description(f"{year} {league}, player ID {player_id}")
+        driver = Driver(headless=True, block_images_and_css=True)
+        try:
+            pbar = tqdm(player_ids, ncols=100)
+            for player_id in pbar:
+                pbar.set_description(f"{year} {league}, player ID {player_id}")
 
-            url = f"{API_PREFIX}/player/{player_id}"
-            response = botasaurus_browser_get_json(url)
-            player_dict = response["player"]
+                url = f"{API_PREFIX}/player/{player_id}"
+                driver.get(url)
+                player_dict = json.loads(driver.page_text)["player"]
 
-            player_name = player_dict["name"]
-            team_name = player_dict["team"]["name"]
-            team_id = player_dict["team"]["id"]
-            position = player_dict["position"] if "position" in player_dict else None
-            positions_detailed = (
-                player_dict["positionsDetailed"] if "positionsDetailed" in player_dict else None
-            )
-            weight = player_dict["weight"] if "weight" in player_dict else None
-            height = player_dict["height"] if "height" in player_dict else None
-            # Need to do UNIX time=0 then plus DOB timestamp because sometimes Windows is dumb with
-            # negative UNIX timestamps I guess. This should work on all platforms.
-            dob = (
-                datetime.fromtimestamp(0, timezone.utc)
-                + timedelta(seconds=player_dict["dateOfBirthTimestamp"])
-                if "dateOfBirthTimestamp" in player_dict else None
-            )
-            preferred_foot = (
-                player_dict["preferredFoot"] if "preferredFoot" in player_dict else None
-            )
-            country = (
-                player_dict["country"]["name"] if "country" in player_dict
-                and "name" in player_dict["country"] else None
-            )
-            contract_until = (
-                datetime.fromtimestamp(0, timezone.utc)
-                + timedelta(seconds=player_dict["contractUntilTimestamp"])
-                if "contractUntilTimestamp" in player_dict else None
-            )
-            market_value = (
-                player_dict["proposedMarketValueRaw"]["value"]
-                if "proposedMarketValueRaw" in player_dict
-                and "value" in player_dict["proposedMarketValueRaw"] else None
-            )
-            market_value_currency = (
-                player_dict["proposedMarketValueRaw"]["currency"]
-                if "proposedMarketValueRaw" in player_dict
-                and "currency" in player_dict["proposedMarketValueRaw"] else None
-            )
-            career_stats = _get_player_career_stats_df(player_id, API_PREFIX)
+                player_name = player_dict["name"]
+                team_name = player_dict["team"]["name"]
+                team_id = player_dict["team"]["id"]
+                position = player_dict["position"] if "position" in player_dict else None
+                positions_detailed = (
+                    player_dict["positionsDetailed"] if "positionsDetailed" in player_dict else None
+                )
+                weight = player_dict["weight"] if "weight" in player_dict else None
+                height = player_dict["height"] if "height" in player_dict else None
+                # Need to do UNIX time=0 then plus DOB timestamp because sometimes Windows is dumb with
+                # negative UNIX timestamps I guess. This should work on all platforms.
+                dob = (
+                    datetime.fromtimestamp(0, timezone.utc)
+                    + timedelta(seconds=player_dict["dateOfBirthTimestamp"])
+                    if "dateOfBirthTimestamp" in player_dict else None
+                )
+                preferred_foot = (
+                    player_dict["preferredFoot"] if "preferredFoot" in player_dict else None
+                )
+                country = (
+                    player_dict["country"]["name"] if "country" in player_dict
+                    and "name" in player_dict["country"] else None
+                )
+                contract_until = (
+                    datetime.fromtimestamp(0, timezone.utc)
+                    + timedelta(seconds=player_dict["contractUntilTimestamp"])
+                    if "contractUntilTimestamp" in player_dict else None
+                )
+                market_value = (
+                    player_dict["proposedMarketValueRaw"]["value"]
+                    if "proposedMarketValueRaw" in player_dict
+                    and "value" in player_dict["proposedMarketValueRaw"] else None
+                )
+                market_value_currency = (
+                    player_dict["proposedMarketValueRaw"]["currency"]
+                    if "proposedMarketValueRaw" in player_dict
+                    and "currency" in player_dict["proposedMarketValueRaw"] else None
+                )
+                career_stats = _get_player_career_stats_df(player_id, API_PREFIX, driver)
 
-            player = SofascorePlayer(
-                id=player_id, name=player_name, team_name=team_name, team_id=team_id,
-                position=position, positions_detailed=positions_detailed, weight=weight,
-                height=height, dob=dob, preferred_foot=preferred_foot, country=country,
-                contract_until=contract_until, market_value=market_value,
-                market_value_currency=market_value_currency, career_stats=career_stats
-            )
-            player_details.append(player)
+                player = SofascorePlayer(
+                    id=player_id, name=player_name, team_name=team_name, team_id=team_id,
+                    position=position, positions_detailed=positions_detailed, weight=weight,
+                    height=height, dob=dob, preferred_foot=preferred_foot, country=country,
+                    contract_until=contract_until, market_value=market_value,
+                    market_value_currency=market_value_currency, career_stats=career_stats
+                )
+                player_details.append(player)
+        finally:
+            driver.close()
 
         return player_details
