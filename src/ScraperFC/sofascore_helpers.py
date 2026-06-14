@@ -1,6 +1,8 @@
 import json
 import pandas as pd
-from .utils.botasaurus_getters import botasaurus_browser_get_json
+from .utils.botasaurus_getters import botasaurus_browser_get_json_via_xhr
+
+_SOFASCORE_HOME = "https://www.sofascore.com/"
 
 # ==================================================================================================
 def _get_player_career_stats_df(player_id: int, api_prefix: str, driver=None) -> pd.DataFrame:
@@ -12,7 +14,7 @@ def _get_player_career_stats_df(player_id: int, api_prefix: str, driver=None) ->
         driver.get(url)
         response = json.loads(driver.page_text)
     else:
-        response = botasaurus_browser_get_json(url)
+        response = botasaurus_browser_get_json_via_xhr(url, _SOFASCORE_HOME)
 
     if "seasons" not in response:
         return pd.DataFrame()
