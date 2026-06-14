@@ -490,20 +490,35 @@ class Sofascore:
         """
         match_id = self._check_and_convert_match_id(match_id)
         players = self.get_match_player_ids(match_id)
-        for player in players:
-            player_id = players[player]
-            url = f"{API_PREFIX}/event/{match_id}/player/{player_id}/heatmap"
 
-            response = botasaurus_browser_get_json_via_xhr(url, _SOFASCORE_HOME)
+        driver = Driver(headless=True, block_images_and_css=True)
+        try:
+            driver.get(_SOFASCORE_HOME)
+            time.sleep(6)
 
-            if "error" not in response:
-                heatmap = [(z["x"], z["y"]) for z in response["heatmap"]]
-            else:
-                # Players that didn't play have empty heatmaps. Don't print warning because there
-                # would be a lot of them.
-                heatmap = list()
+            for player in players:
+                player_id = players[player]
+                url = f"{API_PREFIX}/event/{match_id}/player/{player_id}/heatmap"
 
-            players[player] = {"id": player_id, "heatmap": heatmap}
+                js = f"""
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', {json.dumps(url)}, false);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.send();
+                return JSON.parse(xhr.responseText);
+                """
+                response = driver.run_js(js)
+
+                if "error" not in response:
+                    heatmap = [(z["x"], z["y"]) for z in response["heatmap"]]
+                else:
+                    # Players that didn't play have empty heatmaps. Don't print warning because there
+                    # would be a lot of them.
+                    heatmap = list()
+
+                players[player] = {"id": player_id, "heatmap": heatmap}
+        finally:
+            driver.close()
 
         return players
 
